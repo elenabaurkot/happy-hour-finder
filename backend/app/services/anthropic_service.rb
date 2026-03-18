@@ -74,6 +74,13 @@ class AnthropicService
     - When presenting venues, include: name, address, rating, and any happy hour info available
     - Keep responses short - users want quick answers, not essays
 
+    IMPORTANT - HONESTY ABOUT HAPPY HOUR DATA:
+    - The search tool finds bars and restaurants that LIKELY have happy hours based on their type (bar, pub, etc.)
+    - You do NOT have verified happy hour menus or times from these venues
+    - Be honest: say "These are bars/restaurants that likely have happy hours. I recommend calling ahead or checking their website to confirm current happy hour times and deals."
+    - Do NOT make up specific happy hour times or prices
+    - If you use get_place_details, provide the phone number and website so users can verify
+
     IMPORTANT - DEMO MODE:
     - If tool results contain status: "mock_data" or a "warning" field, the system is in demo mode
     - You MUST clearly inform the user: "Note: I'm currently running in demo mode with example data. These are not real venues."
@@ -137,6 +144,8 @@ class AnthropicService
   private
 
   def execute_tool(name, input)
+    input = input.transform_keys(&:to_s) if input.is_a?(Hash)
+    
     case name
     when "search_happy_hours"
       GooglePlacesService.new.search_happy_hours(

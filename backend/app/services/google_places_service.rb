@@ -3,10 +3,12 @@ class GooglePlacesService
   GEOCODE_BASE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 
   def initialize
-    @api_key = ENV.fetch("GOOGLE_PLACES_API_KEY", nil)
+    key = ENV.fetch("GOOGLE_PLACES_API_KEY", nil)
+    @api_key = key.present? && !key.include?("your_") ? key : nil
   end
 
   def search_happy_hours(location:, radius_miles: 5, limit: 5)
+    return { error: "Location is required" } if location.blank?
     return mock_search_results(location, limit) if @api_key.blank?
 
     coords = geocode_location(location)
