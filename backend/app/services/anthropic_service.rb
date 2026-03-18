@@ -73,6 +73,11 @@ class AnthropicService
     - Use a friendly, casual tone appropriate for finding drinks/food
     - When presenting venues, include: name, address, rating, and any happy hour info available
     - Keep responses short - users want quick answers, not essays
+
+    IMPORTANT - DEMO MODE:
+    - If tool results contain status: "mock_data" or a "warning" field, the system is in demo mode
+    - You MUST clearly inform the user: "Note: I'm currently running in demo mode with example data. These are not real venues."
+    - Do not present mock data as if it were real results
   PROMPT
 
   def initialize
@@ -105,8 +110,8 @@ class AnthropicService
         messages: conversation_messages
       )
 
-      if response.stop_reason == "tool_use"
-        tool_uses = response.content.select { |block| block.type == "tool_use" }
+      if response.stop_reason.to_s == "tool_use"
+        tool_uses = response.content.select { |block| block.type.to_s == "tool_use" }
         
         tool_results = tool_uses.map do |tool_use|
           result = execute_tool(tool_use.name, tool_use.input)
@@ -117,10 +122,10 @@ class AnthropicService
           }
         end
 
-        conversation_messages << { role: "assistant", content: response.content }
+        conversation_messages << { role: "assistant", content: serialize_content(response.content) }
         conversation_messages << { role: "user", content: tool_results }
       else
-        text_response = response.content.find { |block| block.type == "text" }&.text || ""
+        text_response = response.content.find { |block| block.type.to_s == "text" }&.text || ""
         return {
           response: text_response,
           tool_calls: extract_tool_calls(conversation_messages)
@@ -159,11 +164,34 @@ class AnthropicService
     end
   end
 
+  def serialize_content(content)
+    content.map do |block|
+      case block.type.to_s
+      when "text"
+        { type: "text", text: block.text }
+      when "tool_use"
+        { type: "tool_use", id: block.id, name: block.name, input: block.input }
+      else
+        { type: block.type.to_s }
+      end
+    end
+  end
+
   def extract_tool_calls(messages)
-    messages
-      .select { |m| m[:role] == "assistant" }
-      .flat_map { |m| m[:content] }
-      .select { |block| block.respond_to?(:type) && block.type == "tool_use" }
-      .map { |block| { name: block.name, input: block.input } }
+    tool_calls = []
+    messages.each do |m|
+      next unless m[:role] == "assistant"
+      content = m[:content]
+      next unless content.is_a?(Array)
+      
+      content.each do |block|
+        if block.is_a?(Hash) && block[:type] == "tool_use"
+          tool_calls << { name: block[:name], input: block[:input] }
+        elsif block.respond_to?(:type) && block.type.to_s == "tool_use"
+          tool_calls << { name: block.name, input: block.input }
+        end
+      end
+    end
+    tool_calls
   end
 end
