@@ -107,34 +107,43 @@ export function ResultsView({
         </div>
       </div>
 
+      {isLoading && (
+        <div className="expanding-loader">
+          <div className="expanding-spinner"></div>
+          <span>Finding more happy hours...</span>
+        </div>
+      )}
+
       <div className="results-actions">
-        {has_more && (
+        {has_more && !isLoading && (
           <button
             className="action-btn primary"
             onClick={onShowMore}
             disabled={isLoading}
           >
-            {isLoading ? 'Loading...' : `Show ${Math.min(3, total_found - showing)} More`}
+            Show {Math.min(3, total_found - showing)} More
           </button>
         )}
         
-        {!has_more && expandOption && (
+        {!has_more && expandOption && !isLoading && (
           <button
             className="action-btn primary"
             onClick={() => onExpandRadius(expandOption.to)}
             disabled={isLoading}
           >
-            {isLoading ? 'Searching...' : `Expand to ${expandOption.to} miles`}
+            Expand to {expandOption.to} miles
           </button>
         )}
 
-        <button
-          className="action-btn secondary"
-          onClick={onNewSearch}
-          disabled={isLoading}
-        >
-          Search Different Area
-        </button>
+        {!isLoading && (
+          <button
+            className="action-btn secondary"
+            onClick={onNewSearch}
+            disabled={isLoading}
+          >
+            Search Different Area
+          </button>
+        )}
       </div>
 
       <div className="results-footer">

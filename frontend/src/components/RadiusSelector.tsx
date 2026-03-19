@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import './RadiusSelector.css';
 
 interface RadiusSelectorProps {
@@ -14,10 +15,37 @@ const RADIUS_OPTIONS = [
   { value: 10, label: '10 miles', description: 'Worth the drive' },
 ];
 
+const LOADING_MESSAGES = [
+  { icon: '🔍', text: 'Searching for happy hours...' },
+  { icon: '🌐', text: 'Scanning venue websites...' },
+  { icon: '🍺', text: 'Finding the best deals...' },
+  { icon: '✨', text: 'Great things take time...' },
+  { icon: '📍', text: 'Checking nearby spots...' },
+  { icon: '🍸', text: 'Verifying happy hour specials...' },
+  { icon: '🎯', text: 'Almost there...' },
+];
+
 export function RadiusSelector({ location, onRadiusSelect, onBack, isLoading }: RadiusSelectorProps) {
+  const [loadingIndex, setLoadingIndex] = useState(0);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingIndex(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setLoadingIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isLoading]);
+
   const displayLocation = location.includes(',') 
     ? 'your current location' 
     : `ZIP code ${location}`;
+
+  const currentMessage = LOADING_MESSAGES[loadingIndex];
 
   return (
     <div className="radius-selector">
@@ -45,8 +73,13 @@ export function RadiusSelector({ location, onRadiusSelect, onBack, isLoading }: 
       </div>
 
       {isLoading && (
-        <div className="loading-indicator">
-          🔍 Searching for happy hours...
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <div className="loading-message">
+            <span className="loading-icon">{currentMessage.icon}</span>
+            <span className="loading-text">{currentMessage.text}</span>
+          </div>
+          <p className="loading-subtext">This may take up to 30 seconds</p>
         </div>
       )}
     </div>
