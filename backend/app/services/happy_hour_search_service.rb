@@ -37,6 +37,22 @@ class HappyHourSearchService
 
   private
 
+  AGGREGATOR_PATTERNS = [
+    /\d+\s*(of the)?\s*best/i,        # "19 Of The Best", "10 best"
+    /top\s*\d+/i,                      # "Top 10"
+    /best\s*\d+/i,                     # "Best 15"
+    /\byelp\b/i,                       # Yelp
+    /\btripadvisor\b/i,               # TripAdvisor
+    /\bopentable\b/i,                 # OpenTable
+    /\bthrillist\b/i,                 # Thrillist
+    /\beater\b/i,                     # Eater
+    /\btimeout\b/i,                   # Time Out
+    /places\s*to/i,                   # "places to drink"
+    /where\s*to/i,                    # "where to find"
+    /guide\s*to/i,                    # "guide to"
+    /search\s*all/i,                  # "Search All Happy Hours"
+  ].freeze
+
   def find_venues(location, radius_miles)
     venues = []
 
@@ -47,8 +63,14 @@ class HappyHourSearchService
 
     if web_results[:results_with_happy_hour].present?
       web_results[:results_with_happy_hour].each do |result|
+        name = extract_venue_name(result[:title])
+        url = result[:url].to_s
+        
+        # Skip aggregator/listicle results
+        next if is_aggregator?(name, url)
+        
         venues << {
-          name: extract_venue_name(result[:title]),
+          name: name,
           source: "web_search",
           url: result[:url],
           snippet: result[:snippet]
@@ -75,6 +97,19 @@ class HappyHourSearchService
     end
 
     venues.uniq { |v| v[:name]&.downcase&.gsub(/[^a-z]/, '') }.take(MAX_VENUES_TO_CHECK)
+  end
+
+  def is_aggregator?(name, url)
+    # Check name for aggregator patterns
+    return true if AGGREGATOR_PATTERNS.any? { |pattern| name =~ pattern }
+    
+    # Check URL for known aggregator domains
+    aggregator_domains = %w[yelp.com tripadvisor.com opentable.com thrillist.com 
+                            eater.com timeout.com infatuation.com zagat.com
+                            bestthingsxx.com foursquare.com]
+    return true if aggregator_domains.any? { |domain| url.include?(domain) }
+    
+    false
   end
 
   def verify_happy_hours(venues)
