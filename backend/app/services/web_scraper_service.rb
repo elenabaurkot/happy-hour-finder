@@ -184,10 +184,13 @@ class WebScraperService
         
         index = text_lower.index(keyword.downcase)
         if index
-          start_pos = [index - 100, 0].max
-          end_pos = [index + keyword.length + 150, text.length].min
+          start_pos = [index - 50, 0].max
+          end_pos = [index + keyword.length + 200, text.length].min
           snippet = text[start_pos...end_pos].strip
-          snippet = "...#{snippet}..." if start_pos > 0 || end_pos < text.length
+          # Clean up the snippet - capitalize first letter, add ellipsis only at end if truncated
+          snippet = snippet.sub(/^[^a-zA-Z0-9]*/, '') # Remove leading non-alphanumeric
+          snippet = snippet[0].upcase + snippet[1..] if snippet.present? # Capitalize first letter
+          snippet = "#{snippet}..." if end_pos < text.length
           relevant_snippets << snippet
         end
       end
