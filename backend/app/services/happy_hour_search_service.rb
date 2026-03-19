@@ -51,6 +51,12 @@ class HappyHourSearchService
     /where\s*to/i,                    # "where to find"
     /guide\s*to/i,                    # "guide to"
     /search\s*all/i,                  # "Search All Happy Hours"
+    /\bbot\b/i,                       # Bot verification pages
+    /\bverification\b/i,              # Verification pages
+    /\bcaptcha\b/i,                   # Captcha pages
+    /\bcloudflare\b/i,                # Cloudflare blocks
+    /access\s*denied/i,               # Access denied pages
+    /skip\s*to\s*content/i,           # Generic page headers
   ].freeze
 
   def find_venues(location, radius_miles)
