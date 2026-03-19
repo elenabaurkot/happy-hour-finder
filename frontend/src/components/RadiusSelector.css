@@ -1,0 +1,100 @@
+.radius-selector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.back-btn {
+  align-self: flex-start;
+  padding: 8px 16px;
+  font-size: 0.9em;
+  background: none;
+  border: none;
+  color: #667eea;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.back-btn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.back-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.radius-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.radius-header h2 {
+  font-size: 1.5em;
+  margin: 0 0 8px 0;
+  color: #333;
+}
+
+.radius-header p {
+  color: #666;
+  margin: 0;
+  font-size: 0.95em;
+}
+
+.radius-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.radius-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.radius-option:hover:not(:disabled) {
+  border-color: #667eea;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+}
+
+.radius-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.radius-value {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #333;
+}
+
+.radius-desc {
+  font-size: 0.9em;
+  color: #888;
+}
+
+.loading-indicator {
+  margin-top: 24px;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  border-radius: 12px;
+  color: #667eea;
+  font-weight: 500;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
