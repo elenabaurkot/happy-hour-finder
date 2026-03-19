@@ -83,9 +83,14 @@
   line-height: 1.5;
 }
 
-.venue-link {
-  display: inline-block;
+.venue-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-top: 8px;
+}
+
+.venue-link {
   color: #667eea;
   text-decoration: none;
   font-weight: 500;
@@ -93,6 +98,16 @@
 
 .venue-link:hover {
   text-decoration: underline;
+}
+
+.venue-rating {
+  color: #888;
+  font-size: 0.85em;
+}
+
+.venue-address-missing {
+  color: #999;
+  font-style: italic;
 }
 
 .no-results-message {

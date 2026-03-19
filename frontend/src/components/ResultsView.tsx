@@ -1,4 +1,3 @@
-import ReactMarkdown from 'react-markdown';
 import type { SearchResponse } from '../types';
 import './ResultsView.css';
 
@@ -26,7 +25,7 @@ export function ResultsView({
   isLoading,
   currentRadius,
 }: ResultsViewProps) {
-  const { results, formatted_results, total_found, showing, has_more, location, radius_miles, message } = searchResult;
+  const { results, total_found, showing, has_more, location, radius_miles, message } = searchResult;
 
   const displayLocation = location.includes(',') 
     ? 'your location' 
@@ -76,29 +75,19 @@ export function ResultsView({
       </div>
 
       <div className="results-content">
-        {formatted_results ? (
-          <div className="formatted-results">
-            <ReactMarkdown
-              components={{
-                a: ({ href, children }) => (
-                  <a href={href} target="_blank" rel="noopener noreferrer">
-                    {children}
-                  </a>
-                ),
-              }}
-            >
-              {formatted_results}
-            </ReactMarkdown>
-          </div>
-        ) : (
-          <div className="venue-list">
-            {results.map((venue, index) => (
-              <div key={index} className="venue-card">
-                <h3>🍸 {venue.name}</h3>
-                {venue.address && <p className="venue-address">📍 {venue.address}</p>}
-                {venue.happy_hour_details && (
-                  <p className="venue-details">{venue.happy_hour_details}</p>
-                )}
+        <div className="venue-list">
+          {results.map((venue, index) => (
+            <div key={`${venue.name}-${index}`} className="venue-card">
+              <h3>🍸 {venue.name}</h3>
+              {venue.address ? (
+                <p className="venue-address">📍 {venue.address}</p>
+              ) : (
+                <p className="venue-address venue-address-missing">📍 Address not listed</p>
+              )}
+              {venue.happy_hour_details && (
+                <p className="venue-details">{venue.happy_hour_details.slice(0, 200)}{venue.happy_hour_details.length > 200 ? '...' : ''}</p>
+              )}
+              <div className="venue-footer">
                 {venue.happy_hour_url && (
                   <a 
                     href={venue.happy_hour_url} 
@@ -109,10 +98,13 @@ export function ResultsView({
                     🔗 View Menu
                   </a>
                 )}
+                {venue.rating && (
+                  <span className="venue-rating">⭐ {venue.rating}/5</span>
+                )}
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="results-actions">

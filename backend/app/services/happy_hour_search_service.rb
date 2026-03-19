@@ -79,16 +79,39 @@ class HappyHourSearchService
 
   def verify_happy_hours(venues)
     verified = []
+    places_service = GooglePlacesService.new
 
     venues.each do |venue|
       website_url = venue[:url]
 
-      if venue[:place_id] && website_url.nil?
-        details = GooglePlacesService.new.get_place_details(place_id: venue[:place_id])
-        website_url = details[:website]
-        venue[:address] ||= details[:address]
-        venue[:phone] = details[:phone]
-        venue[:rating] = details[:rating]
+      # Always try to get details from Google Places for better address info
+      if venue[:place_id]
+        details = places_service.get_place_details(place_id: venue[:place_id])
+        website_url ||= details[:website]
+        venue[:address] = details[:address] if details[:address].present?
+        venue[:phone] = details[:phone] if details[:phone].present?
+        venue[:rating] = details[:rating] if details[:rating].present?
+      elsif venue[:name].present? && venue[:address].blank?
+        # Try to find address by searching for the venue name
+        search_result = places_service.search_happy_hours(
+          location: venue[:name],
+          radius_miles: 1,
+          limit: 1
+        )
+        if search_result[:results]&.first
+          found = search_result[:results].first
+          venue[:address] = found[:address] if found[:address].present?
+          venue[:place_id] = found[:place_id]
+          
+          # Get more details
+          if found[:place_id]
+            details = places_service.get_place_details(place_id: found[:place_id])
+            website_url ||= details[:website]
+            venue[:address] ||= details[:address]
+            venue[:phone] = details[:phone]
+            venue[:rating] = details[:rating]
+          end
+        end
       end
 
       next unless website_url.present?

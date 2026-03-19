@@ -15,7 +15,12 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const performSearch = useCallback(async (loc: string, rad: number, offset: number = 0) => {
+  const performSearch = useCallback(async (
+    loc: string, 
+    rad: number, 
+    offset: number = 0,
+    appendResults: boolean = false
+  ) => {
     setIsLoading(true);
     setError(null);
 
@@ -37,11 +42,19 @@ function App() {
         throw new Error(data.error || 'Search failed');
       }
 
-      if (offset > 0 && searchResult) {
+      if (appendResults && searchResult) {
+        // Filter out duplicates by name
+        const existingNames = new Set(searchResult.results.map(r => (r.name || '').toLowerCase()));
+        const newResults = data.results.filter(
+          (r: { name?: string }) => !existingNames.has((r.name || '').toLowerCase())
+        );
+        
         setSearchResult({
           ...data,
-          results: [...searchResult.results, ...data.results],
-          showing: searchResult.showing + data.showing,
+          results: [...searchResult.results, ...newResults],
+          showing: searchResult.showing + newResults.length,
+          total_found: searchResult.total_found + newResults.length,
+          radius_miles: rad,
         });
       } else {
         setSearchResult(data);
@@ -67,13 +80,14 @@ function App() {
 
   const handleShowMore = useCallback(() => {
     if (searchResult) {
-      performSearch(location, radius, searchResult.showing);
+      performSearch(location, radius, searchResult.showing, true);
     }
   }, [location, radius, searchResult, performSearch]);
 
   const handleExpandRadius = useCallback((newRadius: number) => {
     setRadius(newRadius);
-    performSearch(location, newRadius);
+    // Append new results from expanded radius to existing results
+    performSearch(location, newRadius, 0, true);
   }, [location, performSearch]);
 
   const handleNewSearch = useCallback(() => {
