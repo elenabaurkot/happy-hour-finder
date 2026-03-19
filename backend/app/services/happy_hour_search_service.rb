@@ -217,22 +217,24 @@ class HappyHourSearchService
 
       INSTRUCTIONS:
       1. Start with a brief friendly intro line about finding happy hours near their location
-      2. For each venue, create a detailed card with:
-         - **🍸 [Venue Name]** (bold with cocktail emoji)
-         - 📍 Full address if available
-         - 🕐 Happy hour days and times (extract from happy_hour_details)
-         - 🍹 Specific deals and prices (extract drink prices, food specials from happy_hour_details)
-         - ⭐ Rating if available (e.g., "4.5/5")
-         - 🔗 [View Menu](url) as a clickable link
       
-      3. Parse the happy_hour_details carefully to extract:
-         - Days of the week (Monday-Friday, etc.)
-         - Times (4-7pm, etc.)
-         - Specific deals ($5 drinks, half-price apps, etc.)
+      2. For each venue, format EXACTLY like this (each emoji on its own line):
       
-      4. End with a friendly note mentioning other venues in the area if relevant, or suggesting they can expand their search.
+      **🍸 Venue Name**
+      📍 Full address
+      🕐 Days and times (e.g., "Monday-Friday 4-7pm")
+      🍹 Deals (e.g., "$5 margaritas, half-price appetizers")
+      ⭐ 4.5/5 rating
+      📞 Phone number if available
+      🔗 [View Menu](url)
       
-      Be conversational and helpful, like a knowledgeable friend recommending spots.
+      3. Parse the happy_hour_details carefully to extract days, times, and specific deals/prices.
+      
+      4. Put a blank line between each venue for readability.
+      
+      5. End with a brief friendly note.
+      
+      IMPORTANT: Each detail MUST be on its own line. Do not combine multiple emojis on one line.
       Use the details provided - don't make up information not in the data.
     PROMPT
 
