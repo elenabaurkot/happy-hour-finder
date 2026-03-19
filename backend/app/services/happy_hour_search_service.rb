@@ -164,13 +164,25 @@ class HappyHourSearchService
         venue[:happy_hour_url] = scrape_result[:found_on]
         venue[:happy_hour_details] = scrape_result[:details][:relevant_text]
         venue[:confidence] = scrape_result[:details][:confidence]
-        verified << venue
+        
+        # Only include venues with verified addresses (so we know they're in radius)
+        if venue[:address].present?
+          verified << venue
+        else
+          Rails.logger.info("Skipping #{venue[:name]} - no address to verify location")
+        end
       elsif scrape_result.dig(:details, :found_happy_hour)
         venue[:happy_hour_verified] = true
         venue[:happy_hour_url] = website_url
         venue[:happy_hour_details] = scrape_result[:details][:relevant_text]
         venue[:confidence] = scrape_result[:details][:confidence]
-        verified << venue
+        
+        # Only include venues with verified addresses
+        if venue[:address].present?
+          verified << venue
+        else
+          Rails.logger.info("Skipping #{venue[:name]} - no address to verify location")
+        end
       end
 
       break if verified.length >= MAX_VENUES_TO_CHECK
