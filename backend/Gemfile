@@ -17,6 +17,9 @@ gem "anthropic"
 # HTTP client for Google Places API
 gem "httparty"
 
+# HTML parsing for web scraping
+gem "nokogiri"
+
 # Rate limiting
 gem "rack-attack"
 

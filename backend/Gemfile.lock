@@ -264,6 +264,7 @@ DEPENDENCIES
   debug
   dotenv-rails
   httparty
+  nokogiri
   puma (>= 5.0)
   rack-attack
   rack-cors

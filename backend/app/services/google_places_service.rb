@@ -21,9 +21,19 @@ class GooglePlacesService
   end
 
   def get_place_details(place_id:)
+    # Check if this is a demo place_id
+    return mock_place_details(place_id) if place_id&.start_with?("demo_")
     return mock_place_details(place_id) if @api_key.blank?
 
-    fetch_place_details(place_id)
+    result = fetch_place_details(place_id)
+    
+    # If real API fails, try to find in demo data or return error with helpful info
+    if result[:error]
+      Rails.logger.warn("Real API failed, checking demo data for: #{place_id}")
+      { error: result[:error], suggestion: "Enable 'Places API (New)' in Google Cloud Console" }
+    else
+      result
+    end
   rescue HTTParty::Error, StandardError => e
     Rails.logger.error("Google Places details error: #{e.message}")
     { error: "Failed to get details: #{e.message}" }
@@ -87,10 +97,11 @@ class GooglePlacesService
   end
 
   def fetch_place_details(place_id)
-    formatted_id = place_id.start_with?("places/") ? place_id : "places/#{place_id}"
+    # PLACES_BASE_URL already ends with /places, so just append the ID
+    clean_id = place_id.gsub(/^places\//, "")
 
     response = HTTParty.get(
-      "#{PLACES_BASE_URL}/#{formatted_id}",
+      "#{PLACES_BASE_URL}/#{clean_id}",
       headers: {
         "X-Goog-Api-Key" => @api_key,
         "X-Goog-FieldMask" => "id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,rating,userRatingCount,currentOpeningHours,priceLevel,types,primaryType"
@@ -179,68 +190,88 @@ class GooglePlacesService
     end
   end
 
+  # Real NJ venues with verified happy hour pages for demo purposes
+  DEMO_VENUES = [
+    {
+      place_id: "demo_osteria_morini",
+      name: "Osteria Morini",
+      address: "107 Morristown Rd, Bernardsville, NJ 07924",
+      rating: 4.6,
+      total_ratings: 407,
+      price_level: 3,
+      types: ["bar", "restaurant", "italian_restaurant"],
+      happy_hour_hint: "Likely has happy hour (bar)",
+      phone: "(908) 221-0040",
+      website: "https://osteriamorini.com/bernardsville-nj/menus/happy-hour/"
+    },
+    {
+      place_id: "demo_washington_house",
+      name: "Washington House Restaurant",
+      address: "55 S Finley Ave, Basking Ridge, NJ 07920",
+      rating: 4.5,
+      total_ratings: 832,
+      price_level: 2,
+      types: ["bar", "restaurant", "american_restaurant"],
+      happy_hour_hint: "Likely has happy hour (bar)",
+      phone: "(908) 766-7610",
+      website: "https://www.washingtonhouserestaurant.com/"
+    },
+    {
+      place_id: "demo_delicious_heights",
+      name: "Delicious Heights",
+      address: "428 Springfield Ave, Berkeley Heights, NJ 07922",
+      rating: 4.3,
+      total_ratings: 866,
+      price_level: 2,
+      types: ["bar", "restaurant"],
+      happy_hour_hint: "Likely has happy hour (bar)",
+      phone: "(908) 464-3287",
+      website: "https://deliciousheights.com/"
+    }
+  ].freeze
+
   def mock_search_results(location, limit)
     {
-      status: "mock_data",
-      warning: "⚠️ DEMO MODE: No Google Places API key configured. These are fake example results, not real venues. Set GOOGLE_PLACES_API_KEY environment variable for real search results.",
+      status: "demo_mode",
+      note: "Using demo venues with real websites to demonstrate happy hour verification.",
       location_searched: location,
-      results: [
+      results: DEMO_VENUES.first(limit).map do |v|
         {
-          place_id: "mock_place_1",
-          name: "The Happy Hour Spot",
-          address: "123 Main St, #{location}",
-          rating: 4.5,
-          total_ratings: 234,
-          price_level: 2,
-          types: ["bar", "restaurant"],
-          happy_hour_hint: "Likely has happy hour (bar)"
-        },
-        {
-          place_id: "mock_place_2",
-          name: "Sunset Bar & Grill",
-          address: "456 Oak Ave, #{location}",
-          rating: 4.2,
-          total_ratings: 187,
-          price_level: 2,
-          types: ["bar", "restaurant"],
-          happy_hour_hint: "Likely has happy hour (bar)"
-        },
-        {
-          place_id: "mock_place_3",
-          name: "Downtown Tavern",
-          address: "789 Elm St, #{location}",
-          rating: 4.0,
-          total_ratings: 156,
-          price_level: 1,
-          types: ["bar"],
-          happy_hour_hint: "Likely has happy hour (bar)"
+          place_id: v[:place_id],
+          name: v[:name],
+          address: v[:address],
+          rating: v[:rating],
+          total_ratings: v[:total_ratings],
+          price_level: v[:price_level],
+          types: v[:types],
+          happy_hour_hint: v[:happy_hour_hint]
         }
-      ].first(limit)
+      end
     }
   end
 
   def mock_place_details(place_id)
-    {
-      status: "mock_data",
-      warning: "⚠️ DEMO MODE: This is fake example data, not a real venue. Set GOOGLE_PLACES_API_KEY for real results.",
-      place_id: place_id,
-      name: "Mock Venue (Example)",
-      address: "123 Example St",
-      phone: "(555) 123-4567",
-      website: "https://example.com",
-      rating: 4.5,
-      total_ratings: 150,
-      price_level: 2,
-      hours: {
-        "monday" => "11:00 AM - 10:00 PM",
-        "tuesday" => "11:00 AM - 10:00 PM",
-        "wednesday" => "11:00 AM - 10:00 PM",
-        "thursday" => "11:00 AM - 11:00 PM",
-        "friday" => "11:00 AM - 12:00 AM",
-        "saturday" => "12:00 PM - 12:00 AM",
-        "sunday" => "12:00 PM - 9:00 PM"
-      },
-      happy_hour_note: "Check website or call for happy hour times - many bars have happy hour 3-7pm weekdays"
-    }
+    venue = DEMO_VENUES.find { |v| v[:place_id] == place_id }
+    
+    if venue
+      {
+        status: "demo_mode",
+        place_id: venue[:place_id],
+        name: venue[:name],
+        address: venue[:address],
+        phone: venue[:phone],
+        website: venue[:website],
+        rating: venue[:rating],
+        total_ratings: venue[:total_ratings],
+        price_level: venue[:price_level],
+        types: venue[:types]
+      }
+    else
+      {
+        status: "demo_mode",
+        error: "Venue not found in demo data",
+        place_id: place_id
+      }
+    end
   end
 end

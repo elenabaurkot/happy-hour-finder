@@ -67,6 +67,66 @@
   border-bottom-left-radius: 4px;
 }
 
+/* Markdown styling for assistant messages */
+.chat-message.assistant .message-text h2 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 12px 0 8px 0;
+  color: #5a4a8a;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 4px;
+}
+
+.chat-message.assistant .message-text h2:first-child {
+  margin-top: 0;
+}
+
+.chat-message.assistant .message-text h3 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 8px 0 4px 0;
+  color: #444;
+}
+
+.chat-message.assistant .message-text p {
+  margin: 6px 0;
+}
+
+.chat-message.assistant .message-text ul {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.chat-message.assistant .message-text li {
+  margin: 3px 0;
+}
+
+.chat-message.assistant .message-text a {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.chat-message.assistant .message-text a:hover {
+  text-decoration: underline;
+}
+
+.chat-message.assistant .message-text strong {
+  font-weight: 600;
+  color: #333;
+}
+
+.chat-message.assistant .message-text em {
+  font-style: italic;
+  color: #666;
+}
+
+.chat-message.assistant .message-text hr {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 12px 0;
+}
+
 .message-time {
   font-size: 11px;
   color: #999;
