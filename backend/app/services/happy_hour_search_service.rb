@@ -199,33 +199,46 @@ class HappyHourSearchService
         address: v[:address],
         happy_hour_details: v[:happy_hour_details],
         url: v[:happy_hour_url],
-        rating: v[:rating]
+        rating: v[:rating],
+        phone: v[:phone]
       }
     end
 
-    prompt = <<~PROMPT
-      Format these #{venues.length} happy hour venues for a chat response. Be concise and friendly.
-      Location searched: #{location} (#{radius_miles} mile radius)
-      Total found: #{total_found}
-      #{has_more ? "More results available." : ""}
+    display_location = location.include?(',') ? "your location" : "ZIP #{location}"
 
-      Venues:
+    prompt = <<~PROMPT
+      You are a friendly happy hour expert. Format these #{venues.length} verified happy hour venues into a helpful response.
+      
+      Location: #{display_location} (#{radius_miles} mile radius)
+      Total venues found: #{total_found}
+
+      VENUE DATA:
       #{venue_data.to_json}
 
-      Format each venue like:
-      **🍸 [Name]**
-      📍 [Address]
-      🕐 [Times if mentioned in details]
-      🍹 [Deals if mentioned]
-      🔗 [View Menu](url)
-
-      Keep it compact. Extract times and deals from the happy_hour_details field.
-      End with a brief note about the results.
+      INSTRUCTIONS:
+      1. Start with a brief friendly intro line about finding happy hours near their location
+      2. For each venue, create a detailed card with:
+         - **🍸 [Venue Name]** (bold with cocktail emoji)
+         - 📍 Full address if available
+         - 🕐 Happy hour days and times (extract from happy_hour_details)
+         - 🍹 Specific deals and prices (extract drink prices, food specials from happy_hour_details)
+         - ⭐ Rating if available (e.g., "4.5/5")
+         - 🔗 [View Menu](url) as a clickable link
+      
+      3. Parse the happy_hour_details carefully to extract:
+         - Days of the week (Monday-Friday, etc.)
+         - Times (4-7pm, etc.)
+         - Specific deals ($5 drinks, half-price apps, etc.)
+      
+      4. End with a friendly note mentioning other venues in the area if relevant, or suggesting they can expand their search.
+      
+      Be conversational and helpful, like a knowledgeable friend recommending spots.
+      Use the details provided - don't make up information not in the data.
     PROMPT
 
     response = client.messages.create(
       model: "claude-sonnet-4-20250514",
-      max_tokens: 600,
+      max_tokens: 800,
       messages: [{ role: "user", content: prompt }]
     )
 
