@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { Message, ChatResponse, ApiError } from '../types';
 
 const API_URL = 'http://localhost:3000/api';
@@ -7,6 +7,10 @@ export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Use ref to access current messages in the callback without stale closure
+  const messagesRef = useRef<Message[]>([]);
+  messagesRef.current = messages;
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
@@ -23,12 +27,21 @@ export function useChat() {
     setError(null);
 
     try {
+      // Build conversation history from existing messages (excluding the new user message)
+      const conversationHistory = messagesRef.current.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
       const response = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: content.trim() }),
+        body: JSON.stringify({ 
+          message: content.trim(),
+          conversation_history: conversationHistory,
+        }),
       });
 
       const data: ChatResponse | ApiError = await response.json();
