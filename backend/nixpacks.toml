@@ -1,5 +1,9 @@
+# Railway/Nixpacks configuration for Rails
 [phases.setup]
-nixPkgs = ["ruby_3_2", "postgresql"]
+nixPkgs = ["ruby_3_2", "postgresql", "nodejs-18_x"]
+
+[phases.install]
+cmds = ["bundle install"]
 
 [start]
-cmd = "bundle exec puma -C config/puma.rb"
+cmd = "bundle exec rails db:migrate && bundle exec puma -C config/puma.rb"
