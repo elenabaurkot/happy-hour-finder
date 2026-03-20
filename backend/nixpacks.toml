@@ -1,0 +1,5 @@
+[phases.setup]
+nixPkgs = ["ruby_3_2", "postgresql"]
+
+[start]
+cmd = "bundle exec puma -C config/puma.rb"

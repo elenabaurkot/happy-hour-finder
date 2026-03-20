@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "cd backend && bundle exec puma -C config/puma.rb",
+    "startCommand": "bundle exec puma -C config/puma.rb",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
