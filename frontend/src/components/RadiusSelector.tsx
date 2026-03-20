@@ -79,7 +79,7 @@ export function RadiusSelector({ location, onRadiusSelect, onBack, isLoading }: 
             <span className="loading-icon">{currentMessage.icon}</span>
             <span className="loading-text">{currentMessage.text}</span>
           </div>
-          <p className="loading-subtext">This may take up to 30 seconds</p>
+          <p className="loading-subtext">This may take up to a minute</p>
         </div>
       )}
     </div>

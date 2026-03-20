@@ -1,7 +1,10 @@
 class HappyHourSearchService
-  MAX_VENUES_TO_CHECK = 10
+  MAX_VENUES_TO_CHECK = 25
 
   def search(location:, radius_miles:, limit:, offset:)
+    # Get coordinates for distance calculation
+    coords = get_coordinates(location)
+    
     venues = find_venues(location, radius_miles)
     
     if venues.empty?
@@ -15,27 +18,66 @@ class HappyHourSearchService
       }
     end
 
-    verified_venues = verify_happy_hours(venues, location)
+    verified_venues = verify_happy_hours(venues, location, coords, radius_miles)
+    
+    # Sort by distance (closest first)
+    verified_venues.sort_by! { |v| v[:distance_miles] || 999 }
     
     total_found = verified_venues.length
-    paginated = verified_venues.drop(offset).take(limit)
-    has_more = (offset + limit) < total_found
-
-    formatted = format_results(paginated, location, radius_miles, total_found, has_more)
+    
+    # Return ALL verified results, not just paginated
+    formatted = format_results(verified_venues, location, radius_miles, total_found, false)
 
     {
-      results: paginated,
+      results: verified_venues,
       formatted_results: formatted,
       total_found: total_found,
-      showing: paginated.length,
-      offset: offset,
-      has_more: has_more,
+      showing: verified_venues.length,
+      offset: 0,
+      has_more: false,
       location: location,
       radius_miles: radius_miles
     }
   end
 
   private
+
+  def get_coordinates(location)
+    # If already coordinates, parse them
+    if location.match?(/^-?\d+\.?\d*,\s*-?\d+\.?\d*$/)
+      lat, lng = location.split(",").map(&:strip).map(&:to_f)
+      return { lat: lat, lng: lng }
+    end
+    
+    # Otherwise use Google Places service to geocode
+    GooglePlacesService.new.geocode(location)
+  end
+
+  def calculate_distance(lat1, lng1, lat2, lng2)
+    # Haversine formula for distance in miles
+    rad_per_deg = Math::PI / 180
+    earth_radius_miles = 3959
+
+    dlat = (lat2 - lat1) * rad_per_deg
+    dlng = (lng2 - lng1) * rad_per_deg
+
+    a = Math.sin(dlat / 2)**2 + 
+        Math.cos(lat1 * rad_per_deg) * Math.cos(lat2 * rad_per_deg) * 
+        Math.sin(dlng / 2)**2
+    c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+
+    earth_radius_miles * c
+  end
+
+  def geocode_address(address)
+    return nil if address.blank?
+    
+    result = GooglePlacesService.new.geocode(address)
+    result
+  rescue StandardError => e
+    Rails.logger.warn("Failed to geocode address: #{e.message}")
+    nil
+  end
 
   AGGREGATOR_PATTERNS = [
     /\d+\s*(of the)?\s*best/i,        # "19 Of The Best", "10 best"
@@ -57,10 +99,21 @@ class HappyHourSearchService
     /\bcloudflare\b/i,                # Cloudflare blocks
     /access\s*denied/i,               # Access denied pages
     /skip\s*to\s*content/i,           # Generic page headers
+    /\bguide\b/i,                     # Any "guide" pages
+    /\bmagazine\b/i,                  # Magazine articles
+    /\bdaily\b/i,                     # Daily news/blogs
+    /\bnot to miss\b/i,               # Listicle language
+    /\bhopper\b/i,                    # happyhopper etc
+    /\btotal\b$/i,                    # Generic "Total" result
+    /\bnorthern\s+new\s+jersey\b/i,   # Regional guides
+    /\bjersey\s+shore\b/i,            # Regional guides
+    /\b\d{4}\b/,                      # Years in title (guides)
   ].freeze
 
   def find_venues(location, radius_miles)
     venues = []
+    web_count = 0
+    places_count = 0
 
     web_results = WebScraperService.new.search_for_happy_hour(
       venue_name: "",
@@ -75,6 +128,7 @@ class HappyHourSearchService
         # Skip aggregator/listicle results
         next if is_aggregator?(name, url)
         
+        web_count += 1
         venues << {
           name: name,
           source: "web_search",
@@ -83,26 +137,31 @@ class HappyHourSearchService
         }
       end
     end
+    Rails.logger.info("[SOURCE] DuckDuckGo Web Search: #{web_count} candidates")
 
     places_results = GooglePlacesService.new.search_happy_hours(
       location: location,
       radius_miles: radius_miles,
-      limit: MAX_VENUES_TO_CHECK
+      limit: 20
     )
 
     if places_results[:results].present?
       places_results[:results].each do |place|
+        places_count += 1
         venues << {
           name: place[:name],
           address: place[:address],
           place_id: place[:place_id],
           rating: place[:rating],
+          url: place[:website],
           source: "google_places"
         }
       end
     end
+    Rails.logger.info("[SOURCE] Google Places Text Search: #{places_count} candidates")
 
-    venues.uniq { |v| v[:name]&.downcase&.gsub(/[^a-z]/, '') }.take(MAX_VENUES_TO_CHECK)
+    # Keep more candidates to ensure we find enough verified results
+    venues.uniq { |v| v[:name]&.downcase&.gsub(/[^a-z]/, '') }
   end
 
   def is_aggregator?(name, url)
@@ -219,77 +278,123 @@ class HappyHourSearchService
     end
   end
 
-  def verify_happy_hours(venues, search_location)
+  def verify_happy_hours(venues, search_location, search_coords, radius_miles)
+    mutex = Mutex.new
     verified = []
-    places_service = GooglePlacesService.new
-
-    venues.each do |venue|
-      website_url = venue[:url]
-
-      # Always try to get details from Google Places for better address info
-      if venue[:place_id]
-        details = places_service.get_place_details(place_id: venue[:place_id])
-        website_url ||= details[:website]
-        venue[:address] = details[:address] if details[:address].present?
-        venue[:phone] = details[:phone] if details[:phone].present?
-        venue[:rating] = details[:rating] if details[:rating].present?
-      elsif venue[:name].present? && venue[:address].blank?
-        # Try to find address by searching for the venue name
-        search_result = places_service.search_happy_hours(
-          location: venue[:name],
-          radius_miles: 1,
-          limit: 1
-        )
-        if search_result[:results]&.first
-          found = search_result[:results].first
-          venue[:address] = found[:address] if found[:address].present?
-          venue[:place_id] = found[:place_id]
-          
-          # Get more details
-          if found[:place_id]
-            details = places_service.get_place_details(place_id: found[:place_id])
-            website_url ||= details[:website]
-            venue[:address] ||= details[:address]
-            venue[:phone] = details[:phone]
-            venue[:rating] = details[:rating]
+    
+    # Process all venues in parallel using threads (max 5 concurrent at a time)
+    venues.each_slice(5) do |venue_batch|
+      threads = venue_batch.map do |venue|
+        Thread.new do
+          result = verify_single_venue(venue, search_location, search_coords, radius_miles)
+          if result
+            mutex.synchronize { verified << result }
           end
         end
       end
-
-      next unless website_url.present?
-
-      scrape_result = WebScraperService.new.deep_scan_venue(base_url: website_url)
       
-      if scrape_result[:found_on].present?
-        venue[:happy_hour_verified] = true
-        venue[:happy_hour_url] = scrape_result[:found_on]
-        venue[:happy_hour_details] = scrape_result[:details][:relevant_text]
-        venue[:confidence] = scrape_result[:details][:confidence]
-        
-        # Only include venues with verified addresses in the right area
-        if venue[:address].present? && address_matches_location?(venue[:address], search_location)
-          verified << venue
-        else
-          Rails.logger.info("Skipping #{venue[:name]} - address '#{venue[:address]}' doesn't match location '#{search_location}'")
-        end
-      elsif scrape_result.dig(:details, :found_happy_hour)
-        venue[:happy_hour_verified] = true
-        venue[:happy_hour_url] = website_url
-        venue[:happy_hour_details] = scrape_result[:details][:relevant_text]
-        venue[:confidence] = scrape_result[:details][:confidence]
-        
-        # Only include venues with verified addresses in the right area
-        if venue[:address].present? && address_matches_location?(venue[:address], search_location)
-          verified << venue
-        else
-          Rails.logger.info("Skipping #{venue[:name]} - address '#{venue[:address]}' doesn't match location '#{search_location}'")
-        end
-      end
-
+      # Wait for this batch to complete
+      threads.each(&:join)
+      
+      # Stop if we have enough verified results
       break if verified.length >= MAX_VENUES_TO_CHECK
     end
 
-    verified
+    # Log source breakdown of verified results
+    web_verified = verified.count { |v| v[:source] == "web_search" }
+    places_verified = verified.count { |v| v[:source] == "google_places" }
+    Rails.logger.info("[VERIFIED] Web Search: #{web_verified}, Google Places: #{places_verified}, Total: #{verified.length}")
+
+    verified.take(MAX_VENUES_TO_CHECK)
+  end
+
+  def verify_single_venue(venue, search_location, search_coords, radius_miles)
+    places_service = GooglePlacesService.new
+    website_url = venue[:url]
+    venue_coords = nil
+
+    # Get details from Google Places for better address info
+    if venue[:place_id]
+      details = places_service.get_place_details(place_id: venue[:place_id])
+      website_url ||= details[:website]
+      venue[:address] = details[:address] if details[:address].present?
+      venue[:phone] = details[:phone] if details[:phone].present?
+      venue[:rating] = details[:rating] if details[:rating].present?
+      venue_coords = details[:location] if details[:location]
+    elsif venue[:name].present? && venue[:address].blank?
+      # Try to find venue details by searching for venue name + location
+      search_query = "#{venue[:name]} #{search_location}"
+      search_result = places_service.text_search_venue(query: search_query)
+      
+      if search_result[:results]&.first
+        found = search_result[:results].first
+        venue[:address] = found[:address] if found[:address].present?
+        venue[:place_id] = found[:place_id]
+        website_url ||= found[:website]
+        venue_coords = found[:location] if found[:location]
+        
+        if found[:place_id] && venue[:address].blank?
+          details = places_service.get_place_details(place_id: found[:place_id])
+          website_url ||= details[:website]
+          venue[:address] ||= details[:address]
+          venue[:phone] = details[:phone]
+          venue[:rating] = details[:rating]
+          venue_coords ||= details[:location]
+        end
+      end
+    end
+
+    # Calculate distance if we have coordinates
+    if search_coords && venue_coords
+      distance = calculate_distance(
+        search_coords[:lat], search_coords[:lng],
+        venue_coords[:lat], venue_coords[:lng]
+      )
+      venue[:distance_miles] = distance.round(1)
+      
+      # Skip venues outside the radius (with small buffer for edge cases)
+      if distance > (radius_miles * 1.2)
+        Rails.logger.info("Skipping #{venue[:name]} - #{distance.round(1)} miles away (outside #{radius_miles} mile radius)")
+        return nil
+      end
+    elsif venue[:address].present? && search_coords
+      # Try to geocode the address to get distance
+      venue_coords = geocode_address(venue[:address])
+      if venue_coords
+        distance = calculate_distance(
+          search_coords[:lat], search_coords[:lng],
+          venue_coords[:lat], venue_coords[:lng]
+        )
+        venue[:distance_miles] = distance.round(1)
+        
+        if distance > (radius_miles * 1.2)
+          Rails.logger.info("Skipping #{venue[:name]} - #{distance.round(1)} miles away (outside #{radius_miles} mile radius)")
+          return nil
+        end
+      end
+    end
+
+    return nil unless website_url.present?
+
+    scrape_result = WebScraperService.new.deep_scan_venue(base_url: website_url)
+    
+    if scrape_result[:found_on].present? || scrape_result.dig(:details, :found_happy_hour)
+      venue[:happy_hour_verified] = true
+      venue[:happy_hour_url] = scrape_result[:found_on] || website_url
+      venue[:happy_hour_details] = scrape_result[:details][:relevant_text]
+      venue[:confidence] = scrape_result[:details][:confidence]
+      
+      if venue[:address].present?
+        return venue
+      else
+        Rails.logger.info("Skipping #{venue[:name]} - no address available")
+      end
+    end
+
+    nil
+  rescue StandardError => e
+    Rails.logger.error("Error verifying venue #{venue[:name]}: #{e.message}")
+    nil
   end
 
   def extract_venue_name(title)
@@ -310,6 +415,7 @@ class HappyHourSearchService
       {
         name: v[:name],
         address: v[:address],
+        distance_miles: v[:distance_miles],
         happy_hour_details: v[:happy_hour_details],
         url: v[:happy_hour_url],
         rating: v[:rating],
@@ -331,7 +437,7 @@ class HappyHourSearchService
       
       Then for EACH venue, use this EXACT format with LINE BREAKS after each line:
       
-      ## 🍸 Venue Name
+      ## 🍸 Venue Name (X.X miles away)
       
       📍 Address here
       
@@ -351,13 +457,16 @@ class HappyHourSearchService
       
       End with one friendly closing sentence.
       
-      CRITICAL: Put each emoji detail on its OWN LINE with a blank line between them.
-      Extract specific times and prices from happy_hour_details. Don't make up info.
+      CRITICAL: 
+      - Put each emoji detail on its OWN LINE with a blank line between them.
+      - Extract specific times and prices from happy_hour_details. Don't make up info.
+      - Include the FULL address - never truncate it.
+      - Use the distance_miles provided for each venue.
     PROMPT
 
     response = client.messages.create(
       model: "claude-sonnet-4-20250514",
-      max_tokens: 800,
+      max_tokens: 1500,
       messages: [{ role: "user", content: prompt }]
     )
 

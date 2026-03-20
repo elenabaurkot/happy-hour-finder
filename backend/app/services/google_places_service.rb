@@ -39,6 +39,41 @@ class GooglePlacesService
     { error: "Failed to get details: #{e.message}" }
   end
 
+  def text_search_venue(query:)
+    return { results: [] } if @api_key.blank?
+
+    body = {
+      textQuery: query,
+      maxResultCount: 1
+    }
+
+    response = HTTParty.post(
+      "#{PLACES_BASE_URL}:searchText",
+      headers: {
+        "Content-Type" => "application/json",
+        "X-Goog-Api-Key" => @api_key,
+        "X-Goog-FieldMask" => "places.id,places.displayName,places.formattedAddress,places.rating,places.websiteUri,places.location"
+      },
+      body: body.to_json
+    )
+
+    unless response.success?
+      Rails.logger.warn("Text search failed for '#{query}': #{response.code}")
+      return { results: [] }
+    end
+
+    places = response["places"] || []
+    { results: places.map { |p| format_place_result(p) } }
+  rescue StandardError => e
+    Rails.logger.error("Text search error: #{e.message}")
+    { results: [] }
+  end
+
+  def geocode(location)
+    return nil if location.blank?
+    geocode_location(location)
+  end
+
   private
 
   def geocode_location(location)
@@ -59,25 +94,35 @@ class GooglePlacesService
   end
 
   def search_nearby_bars(coords, radius_miles, limit)
-    radius_meters = (radius_miles * 1609.34).to_i
+    # Convert radius to approximate lat/lng delta for bounding box
+    # 1 degree latitude ≈ 69 miles, 1 degree longitude varies by latitude
+    lat_delta = radius_miles / 69.0
+    lng_delta = radius_miles / (69.0 * Math.cos(coords[:lat] * Math::PI / 180))
 
+    # Use Text Search with locationRestriction (rectangle) to strictly limit results
     body = {
-      includedTypes: ["bar", "restaurant", "night_club"],
-      maxResultCount: [limit, 20].min,
+      textQuery: "happy hour specials",
+      maxResultCount: 20,
       locationRestriction: {
-        circle: {
-          center: { latitude: coords[:lat], longitude: coords[:lng] },
-          radius: radius_meters.to_f
+        rectangle: {
+          low: { 
+            latitude: coords[:lat] - lat_delta, 
+            longitude: coords[:lng] - lng_delta 
+          },
+          high: { 
+            latitude: coords[:lat] + lat_delta, 
+            longitude: coords[:lng] + lng_delta 
+          }
         }
       }
     }
 
     response = HTTParty.post(
-      "#{PLACES_BASE_URL}:searchNearby",
+      "#{PLACES_BASE_URL}:searchText",
       headers: {
         "Content-Type" => "application/json",
         "X-Goog-Api-Key" => @api_key,
-        "X-Goog-FieldMask" => "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.priceLevel,places.types,places.primaryType"
+        "X-Goog-FieldMask" => "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.priceLevel,places.types,places.primaryType,places.websiteUri,places.location"
       },
       body: body.to_json
     )
@@ -88,6 +133,7 @@ class GooglePlacesService
     end
 
     places = response["places"] || []
+    Rails.logger.info("Text Search found #{places.length} places for 'happy hour specials'")
 
     {
       status: "ok",
@@ -104,7 +150,7 @@ class GooglePlacesService
       "#{PLACES_BASE_URL}/#{clean_id}",
       headers: {
         "X-Goog-Api-Key" => @api_key,
-        "X-Goog-FieldMask" => "id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,rating,userRatingCount,currentOpeningHours,priceLevel,types,primaryType"
+        "X-Goog-FieldMask" => "id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,rating,userRatingCount,currentOpeningHours,priceLevel,types,primaryType,location"
       }
     )
 
@@ -117,6 +163,7 @@ class GooglePlacesService
   end
 
   def format_place_result(place)
+    location = place["location"]
     {
       place_id: place["id"]&.gsub("places/", ""),
       name: place.dig("displayName", "text"),
@@ -126,11 +173,14 @@ class GooglePlacesService
       price_level: format_price_level(place["priceLevel"]),
       types: place["types"],
       primary_type: place["primaryType"],
+      website: place["websiteUri"],
+      location: location ? { lat: location["latitude"], lng: location["longitude"] } : nil,
       happy_hour_hint: infer_happy_hour_hint(place)
     }
   end
 
   def format_place_details(place)
+    location = place["location"]
     {
       place_id: place["id"]&.gsub("places/", ""),
       name: place.dig("displayName", "text"),
@@ -142,6 +192,7 @@ class GooglePlacesService
       price_level: format_price_level(place["priceLevel"]),
       hours: format_hours(place["currentOpeningHours"]),
       types: place["types"],
+      location: location ? { lat: location["latitude"], lng: location["longitude"] } : nil,
       happy_hour_note: "Check website or call for happy hour times - many bars have happy hour 3-7pm weekdays"
     }
   end
