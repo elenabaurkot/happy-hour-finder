@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["ruby_3_2", "postgresql"]
+
+[phases.install]
+cmds = ["cd backend && bundle install"]
+
+[phases.build]
+cmds = ["cd backend && bundle exec rake assets:precompile || true"]
+
+[start]
+cmd = "cd backend && bundle exec puma -C config/puma.rb"
