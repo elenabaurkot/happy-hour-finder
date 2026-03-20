@@ -4,7 +4,6 @@ import './ResultsView.css';
 
 interface ResultsViewProps {
   searchResult: SearchResponse;
-  onShowMore: () => void;
   onExpandRadius: (newRadius: number) => void;
   onNewSearch: () => void;
   isLoading?: boolean;
@@ -20,13 +19,12 @@ const EXPAND_OPTIONS = [
 
 export function ResultsView({
   searchResult,
-  onShowMore,
   onExpandRadius,
   onNewSearch,
   isLoading,
   currentRadius,
 }: ResultsViewProps) {
-  const { results, formatted_results, total_found, showing, has_more, location, radius_miles, message } = searchResult;
+  const { results, formatted_results, total_found, showing, location, radius_miles, message } = searchResult;
 
   const displayLocation = location.includes(',') 
     ? 'your location' 

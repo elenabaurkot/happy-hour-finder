@@ -80,12 +80,6 @@ function App() {
     performSearch(location, rad);
   }, [location, performSearch]);
 
-  const handleShowMore = useCallback(() => {
-    if (searchResult) {
-      performSearch(location, radius, searchResult.showing, true);
-    }
-  }, [location, radius, searchResult, performSearch]);
-
   const handleExpandRadius = useCallback((newRadius: number) => {
     setRadius(newRadius);
     // Append new results from expanded radius to existing results
@@ -142,7 +136,6 @@ function App() {
         {step === 'results' && searchResult && (
           <ResultsView
             searchResult={searchResult}
-            onShowMore={handleShowMore}
             onExpandRadius={handleExpandRadius}
             onNewSearch={handleNewSearch}
             isLoading={isLoading}
