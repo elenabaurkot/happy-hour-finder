@@ -184,11 +184,29 @@ class WebScraperService
         
         index = text_lower.index(keyword.downcase)
         if index
-          start_pos = [index - 100, 0].max
-          end_pos = [index + keyword.length + 150, text.length].min
+          # Start from the keyword itself or a bit before if at start of sentence
+          # Look backwards for a sentence boundary (. ! ? or start of text)
+          search_start = [index - 100, 0].max
+          prefix_text = text[search_start...index]
+          
+          # Find the last sentence boundary before the keyword
+          sentence_start = prefix_text.rindex(/[.!?]\s+/)
+          if sentence_start
+            start_pos = search_start + sentence_start + 2  # Skip the punctuation and space
+          else
+            start_pos = search_start
+          end
+          
+          end_pos = [index + keyword.length + 200, text.length].min
           snippet = text[start_pos...end_pos].strip
-          snippet = "...#{snippet}..." if start_pos > 0 || end_pos < text.length
-          relevant_snippets << snippet
+          
+          # Clean up leading whitespace/punctuation but preserve first letter
+          snippet = snippet.gsub(/^[\s\-–—:,;]+/, '')
+          
+          # Only add ellipsis at end if truncated
+          snippet = "#{snippet}..." if end_pos < text.length && !snippet.end_with?('...')
+          
+          relevant_snippets << snippet if snippet.present?
         end
       end
     end
