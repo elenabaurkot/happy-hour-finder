@@ -132,17 +132,7 @@ export function ResultsView({
       )}
 
       <div className="results-actions">
-        {has_more && !isLoading && (
-          <button
-            className="action-btn primary"
-            onClick={onShowMore}
-            disabled={isLoading}
-          >
-            Show {Math.min(3, total_found - showing)} More
-          </button>
-        )}
-        
-        {!has_more && expandOption && !isLoading && (
+        {expandOption && !isLoading && (
           <button
             className="action-btn primary"
             onClick={() => onExpandRadius(expandOption.to)}

@@ -49,11 +49,13 @@ function App() {
           (r: { name?: string }) => !existingNames.has((r.name || '').toLowerCase())
         );
         
+        const combinedResults = [...searchResult.results, ...newResults];
+        
         setSearchResult({
           ...data,
-          results: [...searchResult.results, ...newResults],
-          showing: searchResult.showing + newResults.length,
-          total_found: searchResult.total_found + newResults.length,
+          results: combinedResults,
+          showing: combinedResults.length,
+          total_found: combinedResults.length,
           radius_miles: rad,
         });
       } else {

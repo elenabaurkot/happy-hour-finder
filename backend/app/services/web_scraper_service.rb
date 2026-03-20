@@ -96,7 +96,7 @@ class WebScraperService
     doc = Nokogiri::HTML(response.body)
     results = []
 
-    doc.css(".result").first(5).each do |result|
+    doc.css(".result").first(15).each do |result|
       title = result.css(".result__title")&.text&.strip
       snippet = result.css(".result__snippet")&.text&.strip
       link = result.css(".result__url")&.text&.strip
