@@ -22,6 +22,9 @@ RUN bundle config set --local without 'development test' && \
 # Copy application code
 COPY . .
 
+# Create necessary directories
+RUN mkdir -p tmp/pids tmp/cache tmp/sockets log
+
 # Expose port
 EXPOSE 3000
 
