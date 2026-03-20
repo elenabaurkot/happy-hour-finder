@@ -15,7 +15,7 @@ class HappyHourSearchService
       }
     end
 
-    verified_venues = verify_happy_hours(venues)
+    verified_venues = verify_happy_hours(venues, location)
     
     total_found = verified_venues.length
     paginated = verified_venues.drop(offset).take(limit)
@@ -118,7 +118,108 @@ class HappyHourSearchService
     false
   end
 
-  def verify_happy_hours(venues)
+  def address_matches_location?(address, search_location)
+    return false if address.blank?
+    
+    address_lower = address.downcase
+    
+    # Extract state from address (look for 2-letter state code or full state name)
+    address_state = extract_state_from_address(address_lower)
+    
+    # If searching by coordinates, we trust Google Places filtering
+    if search_location.match?(/^-?\d+\.\d+,\s*-?\d+\.\d+$/)
+      return true
+    end
+    
+    # If searching by ZIP code, look up what state that ZIP is in
+    if search_location.match?(/^\d{5}$/)
+      search_state = state_for_zip(search_location)
+      if search_state && address_state
+        return search_state == address_state
+      end
+      # If we can't determine states, allow it
+      return true
+    end
+    
+    # If searching by city/state format, extract and compare
+    if search_location.match?(/,\s*([A-Z]{2})\b/i)
+      search_state = search_location.match(/,\s*([A-Z]{2})\b/i)&.[](1)&.downcase
+      if search_state && address_state
+        return search_state == address_state
+      end
+    end
+    
+    true  # Default to allowing if we can't determine
+  end
+
+  def extract_state_from_address(address)
+    # Match 2-letter state code (usually before ZIP)
+    state_match = address.match(/\b([a-z]{2})\s+\d{5}/)
+    return state_match[1] if state_match
+    
+    # Match state code after comma
+    state_match = address.match(/,\s*([a-z]{2})\b/)
+    return state_match[1] if state_match
+    
+    nil
+  end
+
+  def state_for_zip(zip)
+    prefix = zip[0..2].to_i
+    
+    case prefix
+    when 100..149 then 'ny'
+    when 150..196 then 'pa'
+    when 197..199 then 'de'
+    when 200..205 then 'dc'
+    when 206..219 then 'md'
+    when 220..246 then 'va'
+    when 247..268 then 'wv'
+    when 270..289 then 'nc'
+    when 290..299 then 'sc'
+    when 300..319 then 'ga'
+    when 320..339 then 'fl'
+    when 350..369 then 'al'
+    when 370..385 then 'tn'
+    when 386..397 then 'ms'
+    when 400..427 then 'ky'
+    when 430..459 then 'oh'
+    when 460..479 then 'in'
+    when 480..499 then 'mi'
+    when 500..528 then 'ia'
+    when 530..549 then 'wi'
+    when 550..567 then 'mn'
+    when 570..577 then 'sd'
+    when 580..588 then 'nd'
+    when 590..599 then 'mt'
+    when 600..629 then 'il'
+    when 630..658 then 'mo'
+    when 660..679 then 'ks'
+    when 680..693 then 'ne'
+    when 700..714 then 'la'
+    when 716..729 then 'ar'
+    when 730..749 then 'ok'
+    when 750..799 then 'tx'
+    when 800..816 then 'co'
+    when 820..831 then 'wy'
+    when 832..838 then 'id'
+    when 840..847 then 'ut'
+    when 850..865 then 'az'
+    when 870..884 then 'nm'
+    when 889..898 then 'nv'
+    when 900..961 then 'ca'
+    when 967..968 then 'hi'
+    when 970..979 then 'or'
+    when 980..994 then 'wa'
+    when 995..999 then 'ak'
+    when 10..69 then 'ma' # 010-069
+    when 70..89 then 'nj' # 070-089
+    when 90..99 then 'ct' # Overlap with other states, simplified
+    else nil
+    end
+  end
+
+  def verify_happy_hours(venues, search_location)
     verified = []
     places_service = GooglePlacesService.new
 
@@ -165,11 +266,11 @@ class HappyHourSearchService
         venue[:happy_hour_details] = scrape_result[:details][:relevant_text]
         venue[:confidence] = scrape_result[:details][:confidence]
         
-        # Only include venues with verified addresses (so we know they're in radius)
-        if venue[:address].present?
+        # Only include venues with verified addresses in the right area
+        if venue[:address].present? && address_matches_location?(venue[:address], search_location)
           verified << venue
         else
-          Rails.logger.info("Skipping #{venue[:name]} - no address to verify location")
+          Rails.logger.info("Skipping #{venue[:name]} - address '#{venue[:address]}' doesn't match location '#{search_location}'")
         end
       elsif scrape_result.dig(:details, :found_happy_hour)
         venue[:happy_hour_verified] = true
@@ -177,11 +278,11 @@ class HappyHourSearchService
         venue[:happy_hour_details] = scrape_result[:details][:relevant_text]
         venue[:confidence] = scrape_result[:details][:confidence]
         
-        # Only include venues with verified addresses
-        if venue[:address].present?
+        # Only include venues with verified addresses in the right area
+        if venue[:address].present? && address_matches_location?(venue[:address], search_location)
           verified << venue
         else
-          Rails.logger.info("Skipping #{venue[:name]} - no address to verify location")
+          Rails.logger.info("Skipping #{venue[:name]} - address '#{venue[:address]}' doesn't match location '#{search_location}'")
         end
       end
 
@@ -219,35 +320,39 @@ class HappyHourSearchService
     display_location = location.include?(',') ? "your location" : "ZIP #{location}"
 
     prompt = <<~PROMPT
-      You are a friendly happy hour expert. Format these #{venues.length} verified happy hour venues into a helpful response.
-      
-      Location: #{display_location} (#{radius_miles} mile radius)
-      Total venues found: #{total_found}
+      Format these happy hour venues. Location: #{display_location} (#{radius_miles} miles).
 
-      VENUE DATA:
+      DATA:
       #{venue_data.to_json}
 
-      INSTRUCTIONS:
-      1. Start with a brief friendly intro line about finding happy hours near their location
+      FORMAT RULES - FOLLOW EXACTLY:
       
-      2. For each venue, format EXACTLY like this (each emoji on its own line):
+      Start with one friendly intro sentence.
       
-      **🍸 Venue Name**
-      📍 Full address
-      🕐 Days and times (e.g., "Monday-Friday 4-7pm")
-      🍹 Deals (e.g., "$5 margaritas, half-price appetizers")
-      ⭐ 4.5/5 rating
-      📞 Phone number if available
+      Then for EACH venue, use this EXACT format with LINE BREAKS after each line:
+      
+      ## 🍸 Venue Name
+      
+      📍 Address here
+      
+      🕐 Days and times here
+      
+      🍹 Deals and prices here
+      
+      ⭐ Rating here
+      
+      📞 Phone here
+      
       🔗 [View Menu](url)
       
-      3. Parse the happy_hour_details carefully to extract days, times, and specific deals/prices.
+      ---
       
-      4. Put a blank line between each venue for readability.
+      (next venue)
       
-      5. End with a brief friendly note.
+      End with one friendly closing sentence.
       
-      IMPORTANT: Each detail MUST be on its own line. Do not combine multiple emojis on one line.
-      Use the details provided - don't make up information not in the data.
+      CRITICAL: Put each emoji detail on its OWN LINE with a blank line between them.
+      Extract specific times and prices from happy_hour_details. Don't make up info.
     PROMPT
 
     response = client.messages.create(

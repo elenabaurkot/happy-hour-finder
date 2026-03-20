@@ -48,6 +48,16 @@
   font-weight: 600;
 }
 
+.formatted-results h2 {
+  font-size: 1.4em;
+  color: #333;
+  margin: 20px 0 12px 0;
+}
+
+.formatted-results h2:first-of-type {
+  margin-top: 8px;
+}
+
 .formatted-results a {
   color: #667eea;
   text-decoration: none;
