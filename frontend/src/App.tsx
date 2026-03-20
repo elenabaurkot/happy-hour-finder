@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { LocationInput } from './components/LocationInput';
 import { RadiusSelector } from './components/RadiusSelector';
 import { ResultsView } from './components/ResultsView';
@@ -14,6 +14,10 @@ function App() {
   const [searchResult, setSearchResult] = useState<SearchResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Use ref to always have access to current searchResult in callbacks
+  const searchResultRef = useRef<SearchResponse | null>(null);
+  searchResultRef.current = searchResult;
 
   const performSearch = useCallback(async (
     loc: string, 
@@ -42,14 +46,15 @@ function App() {
         throw new Error(data.error || 'Search failed');
       }
 
-      if (appendResults && searchResult) {
+      const currentResult = searchResultRef.current;
+      if (appendResults && currentResult) {
         // Filter out duplicates by name
-        const existingNames = new Set(searchResult.results.map(r => (r.name || '').toLowerCase()));
+        const existingNames = new Set(currentResult.results.map(r => (r.name || '').toLowerCase()));
         const newResults = data.results.filter(
           (r: { name?: string }) => !existingNames.has((r.name || '').toLowerCase())
         );
         
-        const combinedResults = [...searchResult.results, ...newResults];
+        const combinedResults = [...currentResult.results, ...newResults];
         
         setSearchResult({
           ...data,
@@ -68,7 +73,7 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchResult]);
+  }, []);
 
   const handleLocationSubmit = useCallback((loc: string) => {
     setLocation(loc);
