@@ -10,9 +10,14 @@ RUN apt-get update -qq && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
+# Set production environment
+ENV RAILS_ENV=production
+ENV BUNDLE_WITHOUT="development:test"
+
 # Install gems
 COPY Gemfile Gemfile.lock ./
-RUN bundle install --without development test
+RUN bundle config set --local without 'development test' && \
+    bundle install
 
 # Copy application code
 COPY . .
